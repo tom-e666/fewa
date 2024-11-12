@@ -171,3 +171,5 @@ export default function solver(input: string[][], output: string[][]): Array<str
 
     return listString.map(st => decoder(destring(st), decodeMap));
 }
+
+

@@ -1,4 +1,4 @@
-import React, {useEffect} from "react";
+import React, {useEffect, useState} from "react";
 import {
     Background,
     BackgroundVariant,
@@ -13,7 +13,6 @@ import {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import solver from "./AstarSolver.tsx";
-
 interface TitleNodeData {
     label: string;
     width: string;
@@ -135,8 +134,9 @@ function isGridNode(node: GeneralNode): node is Node<GridNodeData> {
 
 export default function App() {
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-    const [edges, , onEdgesChange] = useEdgesState(initialEdges);
-
+    const [edges,setEdge , onEdgesChange] = useEdgesState(initialEdges);
+    const [message,setMessage]=useState("temporaryMessage")
+    const [messageDisabled,setMessageDisabled]=useState(true);
     function handleCellChange(nodeID: string, rowIndex: number, colIndex: number, value: string) {
         setNodes(nodes =>
             nodes.map(node => {
@@ -144,7 +144,6 @@ export default function App() {
                     const updatedValues = node.data.values.map((row, rIdx) =>
                         row.map((oldValue, cIdx) => (rIdx === rowIndex && cIdx === colIndex ? value : oldValue))
                     );
-                    console.log('check point 1');
                     return { ...node, data: { ...node.data, values: updatedValues } };
                 }
                 return node;
@@ -190,35 +189,107 @@ export default function App() {
         }))
     }
 
-    useEffect(() => initHandleCellChange, []);
+    useEffect(() => initHandleCellChange, [initHandleCellChange]);
 
-    function handleSolveClick() {
-        //get input and output string, get the solve function, switch case (string? or array of states, if that is good then create a function that draws
-        const input=nodes.find(node=>node.id=='input-grid');
-        const output=nodes.find(node=>node.id=='input-grid');
-        const solveResult=solver(input,output);
-        
+    function drawNewNode(leftID: string, currentID: string, value: string[][]) {
+        const newNode={
+            id: currentID,
+            type: 'gridNode',
+            position: { x: Math.random() * 250 + 100, y: Math.random() * 250 + 100 },//have to make another one
+            data: {
+            row: value.length, col: value[0].length,
+            title: currentID,
+            values: value,
+            onCellChange: () =>  {}},
+            draggable: true
+            };
+        const newEdge={
+            id: 'e-'+currentID,source:leftID,sourceHandle:'right-source',target:currentID,targetHandle:'left-target',
+        }
+        setNodes(nodes=>[...nodes,newNode]);
+        setEdge(edges=>[...edges,newEdge]);
     }
 
+    function handleSolveClick() {
+        //get input and output string, get the solve function, switch case string? or array of states, if that is good then create a function that draws
+        const input=nodes.find(node=>node.id=='input-grid');
+        const output=nodes.find(node=>node.id=='output-grid');
+        if(input &&isGridNode(input  as unknown as GeneralNode)&&output && isGridNode(output as unknown as GeneralNode)) {
+            const inputGrid = (input.data as GridNodeData).values;
+            const outputGrid = (output.data as GridNodeData).values;
+            const solveResult = solver(inputGrid, outputGrid);
+            if (typeof solveResult === 'string')
+            {
+                setMessage(solveResult);
+                setMessageDisabled(false);
+            }else
+            {
+                //drop the node output
+                setNodes(
+                    nodes.filter(node=>node.id !=='output-grid'&&node.id),
+                )
+                const len=solveResult.length;
+                let leftID='input-grid';
+                for(let i=1;i<len;i++)
+                {
+                    const currentID=`Trans-${i}`;
+                    const value=solveResult[i];
+                    drawNewNode(leftID, currentID,value);
+                    leftID=currentID;
+                }
+            }
+        }
+    }
     return (
-        <div style={{width: '100vw', height: '100vh', backgroundColor: 'white' }}>
+        <div style={{width: '100vw', height: '100vh', backgroundColor: 'white'}}>
             <button onClick={() => increaseGridSize('input-grid', 1, 0)}
-                    style={{position: 'absolute', top: 75, left: 10, zIndex: 10,width:"110px"}}>
+                    style={{position: 'absolute', top: 75, left: 10, zIndex: 10, width: "110px"}}>
                 ⇧ Height
             </button>
             <button onClick={() => increaseGridSize('input-grid', -1, 0)}
-                    style={{position: 'absolute', top: 120, left: 10, zIndex: 10,width:"110px"}} disabled>
+                    style={{position: 'absolute', top: 120, left: 10, zIndex: 10, width: "110px"}} disabled>
                 ⇩ Height
             </button>
             <button onClick={() => increaseGridSize('input-grid', 0, 1)}
-                    style={{position: 'absolute', top: 10, left: 10, zIndex: 10,width:"110px"}}>
+                    style={{position: 'absolute', top: 10, left: 10, zIndex: 10, width: "110px"}}>
                 ⇧ Width
             </button>
             <button onClick={() => increaseGridSize('input-grid', 0, -1)}
-                    style={{position: 'absolute', top: 10, left: 122, zIndex: 10,width:"110px"}} disabled>
+                    style={{position: 'absolute', top: 10, left: 122, zIndex: 10, width: "110px"}} disabled>
                 ⇩ Width
-            </button >
-            <button onClick={()=>handleSolveClick()} style={{position:"absolute",top:200,left:10 ,zIndex:10,width:"110px",backgroundColor:'blue'}}>Solve!</button>
+            </button>
+            <button onClick={() => handleSolveClick()} style={{
+                position: "absolute",
+                top: 200,
+                left: 10,
+                zIndex: 10,
+                width: "110px",
+                backgroundColor: 'blue'
+            }}>Solve!
+            </button>
+
+            {!messageDisabled&&<div
+                style={{
+                    width: '40vw',
+                    height: '20vh',
+                    backgroundColor: 'red',
+                    position: 'absolute',
+                    top:'50%',
+                    left:'50%',
+                    transform: 'translate(-50%, -50%)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 11,
+                    boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.3)', // 3D shadow effect
+                    borderRadius: '10px', // Rounding corners for a soft look
+                }}
+            >
+                <p style={{color: 'white', margin: '0'}}>{message}</p>
+                <button onClick={() => setMessageDisabled(true)}>Close</button>
+            </div>}
+
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
